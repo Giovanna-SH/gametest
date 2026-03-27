@@ -5,7 +5,7 @@
       "name": "deepseek-chat",
       "provider": "deepseek",
       "base_url": "https://api.302.ai/v1" ,
-      "api_key_env": "sk-8db1b5d305994c76a755bbae69475145",
+      "api_key_env": "",
       "max_tokens": 16384,
       "temperature": 0.0
     },
@@ -15,7 +15,7 @@
       "name": "gpt-4o",
       "provider": "openai",
       "base_url": "https://api.302.ai/v1" ,
-      "api_key_env": "sk-cgAQjUOf710441QodrHrQpKDSJip7ae9DeyuJ6OGGQLEUpAY",
+      "api_key_env": "",
       "max_tokens": 16384,
       "temperature": 0.0
     }
