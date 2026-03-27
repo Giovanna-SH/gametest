@@ -1,0 +1,39 @@
+{
+  "models": [
+    {
+      "id": "deepseek-chat",
+      "name": "deepseek-chat",
+      "provider": "deepseek",
+      "base_url": "https://api.302.ai/v1" ,
+      "api_key_env": "sk-8db1b5d305994c76a755bbae69475145",
+      "max_tokens": 16384,
+      "temperature": 0.0
+    },
+    
+    {
+      "id": "gpt-4o",
+      "name": "gpt-4o",
+      "provider": "openai",
+      "base_url": "https://api.302.ai/v1" ,
+      "api_key_env": "sk-cgAQjUOf710441QodrHrQpKDSJip7ae9DeyuJ6OGGQLEUpAY",
+      "max_tokens": 16384,
+      "temperature": 0.0
+    }
+  ],
+  "agents": [
+    {
+      "id": "javascript-html-css",
+      "name": "JavaScript + HTML + CSS Expert",
+      "prompt_files": ["javascript-expert.md", "html-expert.md", "css-expert.md"],
+      "description": "Combined web development expert agent"
+    },
+    {
+      "id": "react-expert",
+      "name": "React Expert",
+      "prompt_files": ["react-expert.md"],
+      "description": "React specialist agent"
+    }
+  ],
+  "max_iterations": 5,
+  "iteration_mode": "syntax_check"
+}

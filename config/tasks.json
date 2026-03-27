@@ -1,0 +1,27 @@
+[
+  {
+    "id": 0,
+    "name": "Snake Game",
+    "prompt": "Create a snake game for the web. Requirements: single HTML file, no external dependencies, playable with arrow keys, score display, game over detection, restart button. The game should be visually polished and fully functional."
+  },
+  {
+    "id": 1,
+    "name": "2048 Game",
+    "prompt": "Create a 2048 game for the web. Requirements: single HTML file, no external dependencies, playable with arrow keys, score display, win/lose detection, smooth tile animations, restart button. The game should be visually polished and fully functional."
+  },
+  {
+    "id": 2,
+    "name": "Tetris",
+    "prompt": "Create a Tetris game for the web. Requirements: single HTML file, no external dependencies, playable with arrow keys, score and level display, line clearing, increasing speed, next piece preview, game over detection, restart button. The game should be visually polished and fully functional."
+  },
+  {
+    "id": 3,
+    "name": "Minesweeper",
+    "prompt": "Create a Minesweeper game for the web. Requirements: single HTML file, no external dependencies, left click to reveal, right click to flag, mine count display, timer, win/lose detection, 16x16 grid with 40 mines, restart button. The game should be visually polished and fully functional."
+  },
+  {
+    "id": 4,
+    "name": "Flappy Bird",
+    "prompt": "Create a Flappy Bird clone for the web. Requirements: single HTML file, no external dependencies, click or spacebar to flap, scrolling pipes with random gaps, score display, collision detection, game over screen with restart. The game should be visually polished and fully functional."
+  }
+]
