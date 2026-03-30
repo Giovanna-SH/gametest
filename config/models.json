@@ -11,8 +11,8 @@
     },
     
     {
-      "id": "gpt-4o",
-      "name": "gpt-4o",
+      "id": "gpt-5-mini",     
+      "name": "gpt-5-mini",  
       "provider": "openai",
       "base_url": "https://api.302.ai/v1" ,
       "api_key_env": "",
