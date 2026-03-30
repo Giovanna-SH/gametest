@@ -113,7 +113,41 @@ def basic_html_check(code: str) -> str:
         errors.append("Code contains error references.")
 
     return "; ".join(errors)
+def select_subagents(client, task_prompt: str, available_agents: list[str]) -> list[str]:
+    """
+    让模型根据任务选择合适的 subagent 文件名列表。
+    available_agents: 所有可用的 .md 文件名列表，如 ['python-expert.md', 'pandas-expert.md', ...]
+    """
+    agent_list_str = "\n".join(f"- {a}" for a in available_agents)
+    selection_prompt = (
+        f"Given the following task:\n{task_prompt}\n\n"
+        f"From this list of available subagents, select the most relevant ones:\n{agent_list_str}\n\n"
+        f"Reply with ONLY a JSON array of filenames, e.g. [\"python-expert.md\", \"pandas-expert.md\"]. "
+        f"No explanation, no markdown, just the JSON array."
+    )
+    resp = client.chat("", [{"role": "user", "content": selection_prompt}])
+    try:
+        selected = json.loads(resp.content.strip())
+        # 过滤掉不在列表里的幻觉结果
+        return [s for s in selected if s in available_agents]
+    except Exception:
+        # 路由失败就返回空，后面会 fallback 到默认 agent
+        return []
 
+
+def build_system_prompt_from_files(selected_files: list[str], prompts_dir: str, fallback_prompt: str) -> str:
+    """根据选中的文件列表拼接 system prompt，失败则用 fallback。"""
+    if not selected_files:
+        return fallback_prompt
+    parts = []
+    for filename in selected_files:
+        filepath = os.path.join(prompts_dir, filename)
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                parts.append(f.read().strip())
+        else:
+            print(f"  [Warning] Subagent file not found: {filepath}")
+    return "\n\n---\n\n".join(parts) if parts else fallback_prompt
 
 def run_multi_turn(client, system_prompt: str, task_prompt: str, max_iter: int = 5) -> dict:
     """
@@ -188,7 +222,6 @@ def run_benchmark(args):
     agents = config["agents"]
     max_iter = config.get("max_iterations", 5)
 
-    # Filter if specific model/task requested
     if args.model:
         models = [m for m in models if m["id"] == args.model]
     if args.task is not None:
@@ -201,32 +234,32 @@ def run_benchmark(args):
         print("❌ No matching tasks found.")
         return
 
-    # Use first agent config (can be extended to loop over agents)
+    # fallback system prompt（路由失败时用）
     agent = agents[0]
-    system_prompt = load_system_prompt(agent, prompts_dir)
+    fallback_prompt = load_system_prompt(agent, prompts_dir)
+
+    # 获取 prompts 目录下所有可用的 .md 文件
+    available_agents = [f for f in os.listdir(prompts_dir) if f.endswith(".md")]
 
     if args.dry_run:
         print("═" * 60)
         print("DRY RUN — Configuration Summary")
         print("═" * 60)
-        print(f"Models:  {[m['id'] for m in models]}")
-        print(f"Tasks:   {[t['name'] for t in tasks]}")
-        print(f"Agent:   {agent['name']}")
-        print(f"Mode:    {'Multi-turn (max {})'.format(max_iter) if args.multi_turn else 'Single-turn'}")
-        print(f"System prompt length: {len(system_prompt)} chars")
-        print(f"\nSystem prompt preview:\n{system_prompt[:500]}...")
+        print(f"Models:         {[m['id'] for m in models]}")
+        print(f"Tasks:          {[t['name'] for t in tasks]}")
+        print(f"Mode:           {'Multi-turn (max {})'.format(max_iter) if args.multi_turn else 'Single-turn'}")
+        print(f"Available agents: {available_agents}")
+        print(f"Fallback prompt length: {len(fallback_prompt)} chars")
         return
 
-    # ── Run evaluations ──
     all_results = []
     total_runs = len(models) * len(tasks)
     run_idx = 0
 
     print("═" * 60)
-    print(f"🎮 Game Code Generation Benchmark — A-Group (System Prompt)")
+    print(f"🎮 Code Generation Benchmark — A-Group (System Prompt)")
     print(f"   Models: {[m['id'] for m in models]}")
-    print(f"   Tasks:  {len(tasks)} games")
-    print(f"   Agent:  {agent['name']}")
+    print(f"   Tasks:  {len(tasks)}")
     print(f"   Mode:   {'Multi-turn' if args.multi_turn else 'Single-turn'}")
     print("═" * 60)
 
@@ -234,10 +267,9 @@ def run_benchmark(args):
         client = create_client(model_config)
         model_id = model_config["id"]
 
-        # Verify API key
-        api_key = os.environ.get(model_config["api_key_env"], "")
+        api_key = model_config["api_key_env"]
         if not api_key:
-            print(f"\n⚠️  Skipping {model_id}: {model_config['api_key_env']} not set")
+            print(f"\n⚠️  Skipping {model_id}: api_key_env not set")
             continue
 
         for task in tasks:
@@ -247,30 +279,43 @@ def run_benchmark(args):
             task_prompt = task["prompt"]
 
             print(f"\n[{run_idx}/{total_runs}] {model_id} × {task_name}")
-            print(f"  Calling API...")
 
-            # Run evaluation
-            if args.multi_turn:
-                result = run_multi_turn(client, system_prompt, task_prompt, max_iter)
+            # ── 路由：让模型选择 subagent ──
+            print(f"  Selecting subagents...")
+            selected = select_subagents(client, task_prompt, available_agents)
+            if selected:
+                print(f"  Selected: {selected}")
             else:
-                result = run_single_turn(client, system_prompt, task_prompt)
+                print(f"  Routing failed, using fallback prompt")
+
+            dynamic_prompt = build_system_prompt_from_files(
+                selected, prompts_dir, fallback_prompt
+            )
+
+            # ── 生成代码 ──
+            print(f"  Calling API...")
+            if args.multi_turn:
+                result = run_multi_turn(client, dynamic_prompt, task_prompt, max_iter)
+            else:
+                result = run_single_turn(client, dynamic_prompt, task_prompt)
 
             if result["error"]:
                 print(f"  ❌ Error: {result['error'][:100]}")
             else:
                 print(f"  ✅ Got response ({result['completion_tokens']} tokens, {result['total_time_sec']}s)")
 
-            # Extract and save code
+            # ── 提取代码 & 截图 ──
             code = extract_code(result["content"])
             code_metrics = compute_code_metrics(code)
             html_path = ""
             screenshot_path = ""
 
             if code:
-                html_path = save_code(code, os.path.join(outputs_dir, "code"), model_id, task_id, task_name)
+                html_path = save_code(
+                    code, os.path.join(outputs_dir, "code"), model_id, task_id, task_name
+                )
                 print(f"  📄 Code: {code_metrics['total_lines']} lines, saved to {html_path}")
 
-                # Take screenshot
                 ss_dir = os.path.join(outputs_dir, "screenshots")
                 ss_filename = f"{model_id}_{task_id}_{task_name.replace(' ', '_')}.png"
                 ss_path = os.path.join(ss_dir, ss_filename)
@@ -280,17 +325,17 @@ def run_benchmark(args):
                     if screenshot_path:
                         print(f"  📸 Screenshot: {screenshot_path}")
                     else:
-                        print(f"  ⚠️  Screenshot failed (install: pip install playwright && playwright install chromium)")
+                        print(f"  ⚠️  Screenshot failed")
             else:
                 print(f"  ⚠️  No code extracted from response")
 
-            # Build result record (matching the Excel columns)
+            # ── 记录结果 ──
             record = {
                 "测评ID": task_id,
                 "任务名称": task_name,
                 "任务描述": task_prompt[:60] + "..." if len(task_prompt) > 60 else task_prompt,
                 "语言模型": model_id,
-                "涉及Agent": agent["name"],
+                "涉及Agent": ", ".join(selected) if selected else agent["name"],
                 "对话轮次": result["rounds"],
                 "AI提问消耗Token": result["prompt_tokens"],
                 "AI回答消耗Token": result["completion_tokens"],
@@ -300,32 +345,27 @@ def run_benchmark(args):
                 "自我迭代次数": result["iterations"],
                 "总耗时": result["total_time_sec"],
                 "运行结果截图": os.path.basename(screenshot_path) if screenshot_path else "",
-                # Internal fields (not displayed but used for report)
                 "_screenshot_path": screenshot_path,
                 "_html_path": html_path,
                 "_error": result["error"],
             }
             all_results.append(record)
 
-            # Save intermediate results (in case of crash)
             interim_path = os.path.join(outputs_dir, "results_interim.json")
             with open(interim_path, "w", encoding="utf-8") as f:
                 json.dump(all_results, f, ensure_ascii=False, indent=2)
 
-    # ── Generate Excel report ──
+    # ── 生成报告 ──
     if all_results:
         report_path = os.path.join(outputs_dir, "benchmark_results.xlsx")
         generate_report(all_results, report_path)
 
-        # Also save raw JSON
         json_path = os.path.join(outputs_dir, "benchmark_results.json")
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(all_results, f, ensure_ascii=False, indent=2)
         print(f"📊 JSON results: {json_path}")
     else:
         print("\n⚠️  No results collected. Check API keys and network.")
-
-
 # ─── CLI ──────────────────────────────────────────────────────────
 
 def main():

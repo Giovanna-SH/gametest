@@ -27,7 +27,7 @@ class DeepSeekClient:
 
     def __init__(self, config: dict):
         self.base_url = config["base_url"].rstrip("/")
-        self.api_key = os.environ.get(config["api_key_env"], "")
+        self.api_key = config["api_key_env"]
         self.model = config["name"]
         self.max_tokens = config.get("max_tokens", 16384)
         self.temperature = config.get("temperature", None)
@@ -84,7 +84,7 @@ class GeminiClient:
 
     def __init__(self, config: dict):
         self.base_url = config["base_url"].rstrip("/")
-        self.api_key = os.environ.get(config["api_key_env"], "")
+        self.api_key = config["api_key_env"]
         self.model = config["name"]
         self.max_tokens = config.get("max_tokens", 16384)
         self.temperature = config.get("temperature", None)
@@ -159,7 +159,7 @@ class GPTClient:
 
     def __init__(self, config: dict):
         self.base_url = config["base_url"].rstrip("/")
-        self.api_key = os.environ.get(config["api_key_env"], "")
+        self.api_key = config["api_key_env"]
         self.model = config["name"]
         self.max_tokens = config.get("max_tokens", 16384)
         self.temperature = config.get("temperature", None)
